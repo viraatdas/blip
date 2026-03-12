@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>blip</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <script
+      async
+      crossorigin="anonymous"
+      data-clerk-publishable-key="pk_test_bWVhc3VyZWQtZmxhbWluZ28tODguY2xlcmsuYWNjb3VudHMuZGV2JA"
+      src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
+      type="text/javascript"
+    ></script>
+  </head>
+  <body>
+    <div id="toast-container"></div>
+
+    <!-- ====== AUTH VIEW ====== -->
+    <div id="view-auth" hidden>
+      <div class="auth-page">
+        <div id="clerk-sign-in"></div>
+        <p class="auth-powered">Serverless Claude Code sessions, on-demand.</p>
+      </div>
+    </div>
+
+    <!-- ====== DASHBOARD VIEW ====== -->
+    <div id="view-dashboard" hidden>
+      <nav class="navbar">
+        <div class="nav-inner">
+          <a class="nav-brand" href="/">
+            <span class="brand-dot"></span>
+            <span>blip</span>
+          </a>
+          <div class="nav-tabs">
+            <button class="nav-tab active" data-tab="overview">Overview</button>
+            <button class="nav-tab" data-tab="keys">API Keys</button>
+            <button class="nav-tab" data-tab="sessions">Sessions</button>
+            <button class="nav-tab" data-tab="billing">Billing</button>
+          </div>
+          <div class="nav-right">
+            <span id="nav-user" class="nav-email"></span>
+            <button id="nav-sign-out" class="nav-signout">Sign out</button>
+          </div>
+        </div>
+      </nav>
+
+      <main class="dash-main">
+        <!-- Overview Panel -->
+        <div id="panel-overview" class="panel">
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-label">Active sessions</div>
+              <div class="stat-value" id="stat-active">-</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Total sessions</div>
+              <div class="stat-value" id="stat-total">-</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">API keys</div>
+              <div class="stat-value" id="stat-keys">-</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Quick start</h3>
+            <p class="muted">Create an API key in the <button class="link-btn" data-goto="keys">API Keys</button> tab, then use these examples.</p>
+          </div>
+
+          <!-- curl: Create session -->
+          <div class="code-block">
+            <div class="code-block-header">
+              <span class="code-block-lang">curl</span>
+              <span class="code-block-desc">Create a session</span>
+              <button class="code-copy-btn" data-copy="curl-create">Copy</button>
+            </div>
+            <pre id="curl-create">curl -X POST https://a4feg8qe30.execute-api.us-west-2.amazonaws.com/v1/sessions \
+  -H "content-type: application/json" \
+  -H "x-api-key: YOUR_BLIP_KEY" \
+  -d '{
+    "model": "claude-sonnet-4-6",
+    "effort": "medium",
+    "agent_options": {
+      "allowedTools": ["Read", "Write", "Bash"],
+      "permissionMode": "default"
+    }
+  }'</pre>
+          </div>
+
+          <!-- curl: Bootstrap -->
+          <div class="code-block">
+            <div class="code-block-header">
+              <span class="code-block-lang">curl</span>
+              <span class="code-block-desc">Bootstrap with your Claude key</span>
+              <button class="code-copy-btn" data-copy="curl-bootstrap">Copy</button>
+            </div>
+            <pre id="curl-bootstrap"><span class="cm"># Use the bootstrap_url from the session response</span>
+curl -X POST {bootstrap_url} \
+  -H "content-type: application/json" \
+  -d '{"api_key": "sk-ant-YOUR_CLAUDE_KEY"}'</pre>
+          </div>
+
+          <!-- curl: Send message -->
+          <div class="code-block">
+            <div class="code-block-header">
+              <span class="code-block-lang">curl</span>
+              <span class="code-block-desc">Send a message</span>
+              <button class="code-copy-btn" data-copy="curl-message">Copy</button>
+            </div>
+            <pre id="curl-message">curl -X POST https://a4feg8qe30.execute-api.us-west-2.amazonaws.com/v1/sessions/{session_id}/messages \
+  -H "content-type: application/json" \
+  -H "x-api-key: YOUR_BLIP_KEY" \
+  -d '{"prompt": "What files are in this directory?"}'</pre>
+          </div>
+
+          <!-- Python -->
+          <div class="code-block">
+            <div class="code-block-header">
+              <span class="code-block-lang">python</span>
+              <span class="code-block-desc">Full example</span>
+              <button class="code-copy-btn" data-copy="python-example">Copy</button>
+            </div>
+            <pre id="python-example"><span class="kw">import</span> requests
+
+BASE = <span class="str">"https://a4feg8qe30.execute-api.us-west-2.amazonaws.com"</span>
+BLIP_KEY = <span class="str">"YOUR_BLIP_KEY"</span>
+CLAUDE_KEY = <span class="str">"sk-ant-YOUR_CLAUDE_KEY"</span>
+
+headers = {<span class="str">"content-type"</span>: <span class="str">"application/json"</span>, <span class="str">"x-api-key"</span>: BLIP_KEY}
+
+<span class="cm"># 1. Create session</span>
+session = requests.<span class="fn">post</span>(f<span class="str">"{BASE}/v1/sessions"</span>, headers=headers, json={
+    <span class="str">"model"</span>: <span class="str">"claude-sonnet-4-6"</span>,
+    <span class="str">"effort"</span>: <span class="str">"medium"</span>,
+    <span class="str">"agent_options"</span>: {<span class="str">"allowedTools"</span>: [<span class="str">"Read"</span>, <span class="str">"Bash"</span>]}
+}).<span class="fn">json</span>()
+
+<span class="cm"># 2. Bootstrap with Claude key</span>
+requests.<span class="fn">post</span>(session[<span class="str">"bootstrap_url"</span>], json={<span class="str">"api_key"</span>: CLAUDE_KEY})
+
+<span class="cm"># 3. Send message</span>
+sid = session[<span class="str">"session_id"</span>]
+result = requests.<span class="fn">post</span>(f<span class="str">"{BASE}/v1/sessions/{sid}/messages"</span>, headers=headers,
+    json={<span class="str">"prompt"</span>: <span class="str">"List files in the workspace"</span>}
+).<span class="fn">json</span>()
+
+<span class="fn">print</span>(result)</pre>
+          </div>
+
+          <!-- Node.js -->
+          <div class="code-block">
+            <div class="code-block-header">
+              <span class="code-block-lang">node.js</span>
+              <span class="code-block-desc">Full example</span>
+              <button class="code-copy-btn" data-copy="node-example">Copy</button>
+            </div>
+            <pre id="node-example"><span class="kw">const</span> BASE = <span class="str">"https://a4feg8qe30.execute-api.us-west-2.amazonaws.com"</span>;
+<span class="kw">const</span> BLIP_KEY = <span class="str">"YOUR_BLIP_KEY"</span>;
+<span class="kw">const</span> CLAUDE_KEY = <span class="str">"sk-ant-YOUR_CLAUDE_KEY"</span>;
+
+<span class="kw">const</span> headers = { <span class="str">"content-type"</span>: <span class="str">"application/json"</span>, <span class="str">"x-api-key"</span>: BLIP_KEY };
+
+<span class="cm">// 1. Create session</span>
+<span class="kw">const</span> session = <span class="kw">await</span> <span class="fn">fetch</span>(<span class="str">`${BASE}/v1/sessions`</span>, {
+  method: <span class="str">"POST"</span>, headers,
+  body: JSON.<span class="fn">stringify</span>({
+    model: <span class="str">"claude-sonnet-4-6"</span>,
+    effort: <span class="str">"medium"</span>,
+    agent_options: { allowedTools: [<span class="str">"Read"</span>, <span class="str">"Bash"</span>] }
+  })
+}).then(r => r.<span class="fn">json</span>());
+
+<span class="cm">// 2. Bootstrap with Claude key</span>
+<span class="kw">await</span> <span class="fn">fetch</span>(session.bootstrap_url, {
+  method: <span class="str">"POST"</span>,
+  headers: { <span class="str">"content-type"</span>: <span class="str">"application/json"</span> },
+  body: JSON.<span class="fn">stringify</span>({ api_key: CLAUDE_KEY })
+});
+
+<span class="cm">// 3. Send message</span>
+<span class="kw">const</span> result = <span class="kw">await</span> <span class="fn">fetch</span>(<span class="str">`${BASE}/v1/sessions/${session.session_id}/messages`</span>, {
+  method: <span class="str">"POST"</span>, headers,
+  body: JSON.<span class="fn">stringify</span>({ prompt: <span class="str">"List files in the workspace"</span> })
+}).then(r => r.<span class="fn">json</span>());
+
+console.<span class="fn">log</span>(result);</pre>
+          </div>
+
+          <!-- API reference -->
+          <div class="card">
+            <h3>Endpoints</h3>
+            <div class="api-table">
+              <div class="api-row">
+                <code class="api-method post">POST</code>
+                <code class="api-path">/v1/sessions</code>
+                <span class="api-desc">Create session</span>
+              </div>
+              <div class="api-row">
+                <code class="api-method post">POST</code>
+                <code class="api-path">/v1/sessions/{id}/messages</code>
+                <span class="api-desc">Send message</span>
+              </div>
+              <div class="api-row">
+                <code class="api-method get">GET</code>
+                <code class="api-path">/v1/sessions/{id}</code>
+                <span class="api-desc">Get session</span>
+              </div>
+              <div class="api-row">
+                <code class="api-method del">DEL</code>
+                <code class="api-path">/v1/sessions/{id}</code>
+                <span class="api-desc">Delete session</span>
+              </div>
+              <div class="api-row">
+                <code class="api-method post">POST</code>
+                <code class="api-path">/v1/sessions/{id}/stream-token</code>
+                <span class="api-desc">Get SSE token</span>
+              </div>
+            </div>
+            <p class="api-base">Base: <code>https://a4feg8qe30.execute-api.us-west-2.amazonaws.com</code></p>
+          </div>
+        </div>
+
+        <!-- API Keys Panel -->
+        <div id="panel-keys" class="panel" hidden>
+          <div class="panel-header">
+            <div>
+              <h2>API Keys</h2>
+              <p class="muted">Keys for programmatic access. Shown only once at creation.</p>
+            </div>
+            <button id="create-key-btn" class="btn btn-primary">Create key</button>
+          </div>
+
+          <div id="new-key-alert" class="alert alert-success" hidden>
+            <p>Key created. Copy it now &mdash; it won&rsquo;t be shown again.</p>
+            <div class="key-copy-row">
+              <code id="new-key-value"></code>
+              <button id="copy-key-btn" class="btn btn-sm btn-secondary">Copy</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="field">
+              <label class="field-label">Active key</label>
+              <input id="active-key-input" type="password" class="input mono" placeholder="blip_..." />
+              <p class="field-hint">Paste a key here to use for session operations.</p>
+            </div>
+          </div>
+
+          <div id="key-list" class="key-list">
+            <p class="empty" style="padding: 16px">No API keys yet.</p>
+          </div>
+        </div>
+
+        <!-- Sessions Panel -->
+        <div id="panel-sessions" class="panel" hidden>
+          <div class="card">
+            <div class="card-header">
+              <h3>Create session</h3>
+              <button id="create-session-btn" class="btn btn-primary btn-sm">Create</button>
+            </div>
+            <div class="form-row">
+              <div class="field">
+                <label class="field-label">Model</label>
+                <input id="model-input" type="text" class="input mono" value="claude-sonnet-4-6" />
+              </div>
+              <div class="field">
+                <label class="field-label">Effort</label>
+                <select id="effort-select" class="input">
+                  <option value="low">Low</option>
+                  <option value="medium" selected>Medium</option>
+                  <option value="high">High</option>
+                </select>
+              </div>
+            </div>
+            <div class="field">
+              <label class="field-label">Agent options (JSON)</label>
+              <textarea id="agent-options-input" class="input mono" rows="3">{
+  "allowedTools": ["Read", "Write", "Bash"],
+  "permissionMode": "default"
+}</textarea>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h3>Session</h3>
+              <div class="btn-row">
+                <button id="refresh-session-btn" class="btn btn-ghost btn-sm">Refresh</button>
+                <button id="delete-session-btn" class="btn btn-danger btn-sm">Delete</button>
+              </div>
+            </div>
+            <div id="session-summary" class="summary-box">
+              <p class="empty">No active session.</p>
+            </div>
+            <div class="form-row">
+              <div class="field">
+                <label class="field-label">Claude API key</label>
+                <input id="claude-key-input" type="password" class="input mono" placeholder="sk-ant-..." />
+              </div>
+              <div class="btn-row" style="align-self: flex-end; padding-bottom: 1px">
+                <button id="bootstrap-btn" class="btn btn-primary btn-sm">Bootstrap</button>
+                <button id="connect-events-btn" class="btn btn-secondary btn-sm">SSE</button>
+              </div>
+            </div>
+            <div class="field">
+              <label class="field-label">Prompt</label>
+              <textarea id="prompt-input" class="input" rows="3" placeholder="Ask the session something..."></textarea>
+            </div>
+            <button id="send-message-btn" class="btn btn-primary">Send message</button>
+          </div>
+
+          <div class="terminal">
+            <div class="terminal-bar">
+              <div class="terminal-dots">
+                <span></span><span></span><span></span>
+              </div>
+              <span class="terminal-title">console</span>
+              <button id="clear-log-btn" class="btn btn-ghost btn-sm">Clear</button>
+            </div>
+            <pre id="event-log" class="event-log">Waiting for session activity.</pre>
+          </div>
+        </div>
+
+        <!-- Billing Panel -->
+        <div id="panel-billing" class="panel" hidden>
+          <div class="panel-header">
+            <div>
+              <h2>Billing</h2>
+              <p class="muted">Usage-based billing. Add a payment method to get started.</p>
+            </div>
+          </div>
+
+          <div class="card">
+            <div id="billing-status">
+              <p class="empty">Loading&hellip;</p>
+            </div>
+            <div class="btn-row" style="margin-top: 4px">
+              <button id="add-payment-btn" class="btn btn-primary">Add payment method</button>
+              <button id="manage-billing-btn" class="btn btn-secondary">Manage billing</button>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <!-- ====== LOADING VIEW ====== -->
+    <div id="view-loading">
+      <div class="loading-full">
+        <div class="spinner"></div>
+      </div>
+    </div>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
