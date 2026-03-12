@@ -11,6 +11,7 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
     <script
       async
       crossorigin="anonymous"
@@ -31,29 +32,31 @@
     </div>
 
     <!-- ====== DASHBOARD VIEW ====== -->
-    <div id="view-dashboard" hidden>
-      <nav class="navbar">
-        <div class="nav-inner">
-          <a class="nav-brand" href="/">
-            <span class="brand-dot"></span>
-            <span>blip</span>
-          </a>
-          <div class="nav-tabs">
-            <button class="nav-tab active" data-tab="overview">Overview</button>
-            <button class="nav-tab" data-tab="keys">API Keys</button>
-            <button class="nav-tab" data-tab="sessions">Sessions</button>
-            <button class="nav-tab" data-tab="billing">Billing</button>
-          </div>
-          <div class="nav-right">
-            <span id="nav-user" class="nav-email"></span>
-            <button id="nav-sign-out" class="nav-signout">Sign out</button>
-          </div>
+    <div id="view-dashboard" class="dashboard" hidden>
+      <aside class="sidebar">
+        <a class="sidebar-brand" href="/">
+          <span class="brand-dot"></span>
+          <span>blip</span>
+        </a>
+        <nav class="sidebar-nav">
+          <button class="nav-link active" data-tab="overview">Overview</button>
+          <button class="nav-link" data-tab="keys">API Keys</button>
+          <button class="nav-link" data-tab="usage">Usage</button>
+          <button class="nav-link" data-tab="billing">Billing</button>
+        </nav>
+        <div class="sidebar-footer">
+          <div id="nav-user" class="sidebar-email"></div>
+          <button id="nav-sign-out" class="sidebar-signout">Sign out</button>
         </div>
-      </nav>
+      </aside>
 
       <main class="dash-main">
-        <!-- Overview Panel -->
+        <!-- ── Overview ── -->
         <div id="panel-overview" class="panel">
+          <div class="page-header">
+            <h1>Overview</h1>
+          </div>
+
           <div class="stats-grid">
             <div class="stat-card">
               <div class="stat-label">Active sessions</div>
@@ -71,10 +74,9 @@
 
           <div class="card">
             <h3>Quick start</h3>
-            <p class="muted">Create an API key in the <button class="link-btn" data-goto="keys">API Keys</button> tab, then use these examples.</p>
+            <p class="muted">Create an <button class="link-btn" data-goto="keys">API key</button>, then use these snippets to launch a session.</p>
           </div>
 
-          <!-- curl: Create session -->
           <div class="code-block">
             <div class="code-block-header">
               <span class="code-block-lang">curl</span>
@@ -94,7 +96,6 @@
   }'</pre>
           </div>
 
-          <!-- curl: Bootstrap -->
           <div class="code-block">
             <div class="code-block-header">
               <span class="code-block-lang">curl</span>
@@ -107,7 +108,6 @@ curl -X POST {bootstrap_url} \
   -d '{"api_key": "sk-ant-YOUR_CLAUDE_KEY"}'</pre>
           </div>
 
-          <!-- curl: Send message -->
           <div class="code-block">
             <div class="code-block-header">
               <span class="code-block-lang">curl</span>
@@ -120,7 +120,6 @@ curl -X POST {bootstrap_url} \
   -d '{"prompt": "What files are in this directory?"}'</pre>
           </div>
 
-          <!-- Python -->
           <div class="code-block">
             <div class="code-block-header">
               <span class="code-block-lang">python</span>
@@ -154,7 +153,6 @@ result = requests.<span class="fn">post</span>(f<span class="str">"{BASE}/v1/ses
 <span class="fn">print</span>(result)</pre>
           </div>
 
-          <!-- Node.js -->
           <div class="code-block">
             <div class="code-block-header">
               <span class="code-block-lang">node.js</span>
@@ -193,7 +191,6 @@ result = requests.<span class="fn">post</span>(f<span class="str">"{BASE}/v1/ses
 console.<span class="fn">log</span>(result);</pre>
           </div>
 
-          <!-- API reference -->
           <div class="card">
             <h3>Endpoints</h3>
             <div class="api-table">
@@ -227,18 +224,23 @@ console.<span class="fn">log</span>(result);</pre>
           </div>
         </div>
 
-        <!-- API Keys Panel -->
+        <!-- ── API Keys ── -->
         <div id="panel-keys" class="panel" hidden>
-          <div class="panel-header">
-            <div>
-              <h2>API Keys</h2>
-              <p class="muted">Keys for programmatic access. Shown only once at creation.</p>
+          <div class="page-header">
+            <h1>API Keys</h1>
+            <p class="muted">Manage keys for programmatic access. Full keys are shown only once at creation.</p>
+          </div>
+
+          <div class="card">
+            <h3>Create new key</h3>
+            <div class="create-key-row">
+              <input id="key-name-input" type="text" class="input" placeholder="Key name, e.g. Production" />
+              <button id="create-key-btn" class="btn btn-primary">Create key</button>
             </div>
-            <button id="create-key-btn" class="btn btn-primary">Create key</button>
           </div>
 
           <div id="new-key-alert" class="alert alert-success" hidden>
-            <p>Key created. Copy it now &mdash; it won&rsquo;t be shown again.</p>
+            <p>Key created — copy it now, it won't be shown again.</p>
             <div class="key-copy-row">
               <code id="new-key-value"></code>
               <button id="copy-key-btn" class="btn btn-sm btn-secondary">Copy</button>
@@ -246,102 +248,64 @@ console.<span class="fn">log</span>(result);</pre>
           </div>
 
           <div class="card">
+            <h3>Your keys</h3>
+            <p class="field-hint" style="margin-bottom:8px">The active key (highlighted) is used for session operations from this console.</p>
+            <div id="key-list" class="key-list">
+              <p class="empty">No API keys yet.</p>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Active key</h3>
             <div class="field">
-              <label class="field-label">Active key</label>
               <input id="active-key-input" type="password" class="input mono" placeholder="blip_..." />
-              <p class="field-hint">Paste a key here to use for session operations.</p>
+              <p class="field-hint">Paste or type a key here to use for API operations.</p>
             </div>
-          </div>
-
-          <div id="key-list" class="key-list">
-            <p class="empty" style="padding: 16px">No API keys yet.</p>
           </div>
         </div>
 
-        <!-- Sessions Panel -->
-        <div id="panel-sessions" class="panel" hidden>
-          <div class="card">
-            <div class="card-header">
-              <h3>Create session</h3>
-              <button id="create-session-btn" class="btn btn-primary btn-sm">Create</button>
-            </div>
-            <div class="form-row">
-              <div class="field">
-                <label class="field-label">Model</label>
-                <input id="model-input" type="text" class="input mono" value="claude-sonnet-4-6" />
-              </div>
-              <div class="field">
-                <label class="field-label">Effort</label>
-                <select id="effort-select" class="input">
-                  <option value="low">Low</option>
-                  <option value="medium" selected>Medium</option>
-                  <option value="high">High</option>
-                </select>
+        <!-- ── Usage ── -->
+        <div id="panel-usage" class="panel" hidden>
+          <div class="page-header">
+            <h1>Usage</h1>
+            <p class="muted">Session activity across your API keys.</p>
+          </div>
+
+          <div class="charts-grid">
+            <div class="card chart-card">
+              <h3>Sessions over time</h3>
+              <div class="chart-wrap">
+                <canvas id="sessions-chart"></canvas>
               </div>
             </div>
-            <div class="field">
-              <label class="field-label">Agent options (JSON)</label>
-              <textarea id="agent-options-input" class="input mono" rows="3">{
-  "allowedTools": ["Read", "Write", "Bash"],
-  "permissionMode": "default"
-}</textarea>
+            <div class="card chart-card">
+              <h3>By model</h3>
+              <div class="chart-wrap chart-wrap-sm">
+                <canvas id="model-chart"></canvas>
+              </div>
             </div>
           </div>
 
           <div class="card">
-            <div class="card-header">
-              <h3>Session</h3>
-              <div class="btn-row">
-                <button id="refresh-session-btn" class="btn btn-ghost btn-sm">Refresh</button>
-                <button id="delete-session-btn" class="btn btn-danger btn-sm">Delete</button>
-              </div>
+            <h3>Recent sessions</h3>
+            <div id="sessions-table" class="data-table">
+              <p class="empty">No sessions yet.</p>
             </div>
-            <div id="session-summary" class="summary-box">
-              <p class="empty">No active session.</p>
-            </div>
-            <div class="form-row">
-              <div class="field">
-                <label class="field-label">Claude API key</label>
-                <input id="claude-key-input" type="password" class="input mono" placeholder="sk-ant-..." />
-              </div>
-              <div class="btn-row" style="align-self: flex-end; padding-bottom: 1px">
-                <button id="bootstrap-btn" class="btn btn-primary btn-sm">Bootstrap</button>
-                <button id="connect-events-btn" class="btn btn-secondary btn-sm">SSE</button>
-              </div>
-            </div>
-            <div class="field">
-              <label class="field-label">Prompt</label>
-              <textarea id="prompt-input" class="input" rows="3" placeholder="Ask the session something..."></textarea>
-            </div>
-            <button id="send-message-btn" class="btn btn-primary">Send message</button>
-          </div>
-
-          <div class="terminal">
-            <div class="terminal-bar">
-              <div class="terminal-dots">
-                <span></span><span></span><span></span>
-              </div>
-              <span class="terminal-title">console</span>
-              <button id="clear-log-btn" class="btn btn-ghost btn-sm">Clear</button>
-            </div>
-            <pre id="event-log" class="event-log">Waiting for session activity.</pre>
           </div>
         </div>
 
-        <!-- Billing Panel -->
+        <!-- ── Billing ── -->
         <div id="panel-billing" class="panel" hidden>
-          <div class="panel-header">
-            <div>
-              <h2>Billing</h2>
-              <p class="muted">Usage-based billing. Add a payment method to get started.</p>
-            </div>
+          <div class="page-header">
+            <h1>Billing</h1>
+            <p class="muted">Manage your payment method and invoices.</p>
           </div>
 
           <div class="card">
             <div id="billing-status">
               <p class="empty">Loading&hellip;</p>
             </div>
-            <div class="btn-row" style="margin-top: 4px">
+            <div class="btn-row" style="margin-top: 12px">
               <button id="add-payment-btn" class="btn btn-primary">Add payment method</button>
               <button id="manage-billing-btn" class="btn btn-secondary">Manage billing</button>
             </div>

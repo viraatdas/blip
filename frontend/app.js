@@ -55,8 +55,8 @@ async function userFetch(path, opts = {}) {
 }
 
 function apiFetch(path, opts = {}) {
-  const key = $("active-key-input")?.value.trim();
-  if (!key) throw new Error("Set an active API key first.");
+  const key = $("active-key-input")?.value.trim() || ls.get(SK.apiKey);
+  if (!key) throw new Error("Create an API key first.");
   return fetch(`${config.apiBaseUrl}${path}`, {
     ...opts,
     headers: { "content-type": "application/json", "x-api-key": key, ...(opts.headers ?? {}) }
@@ -93,14 +93,19 @@ let currentTab = "overview";
 
 function switchTab(tab) {
   currentTab = tab;
-  document.querySelectorAll(".nav-tab").forEach(t => t.classList.toggle("active", t.dataset.tab === tab));
-  for (const id of ["panel-overview", "panel-keys", "panel-sessions", "panel-billing"]) {
+  document.querySelectorAll("[data-tab]").forEach(t =>
+    t.classList.toggle("active", t.dataset.tab === tab)
+  );
+  for (const id of ["panel-overview", "panel-keys", "panel-usage", "panel-billing"]) {
     const p = $(id);
     if (p) p.hidden = (id !== `panel-${tab}`);
   }
+  if (tab === "usage") loadUsageHistory();
+  if (tab === "billing") loadBilling();
+  if (tab === "keys") loadKeys();
 }
 
-// ── Usage ──
+// ── Usage Stats ──
 
 async function loadUsage() {
   try {
@@ -113,16 +118,198 @@ async function loadUsage() {
   } catch { /* ignore */ }
 }
 
+// ── Usage History & Charts ──
+
+async function loadUsageHistory() {
+  try {
+    const res = await userFetch("/v1/usage/history");
+    if (!res.ok) return;
+    const data = await res.json();
+    renderSessionsChart(data.sessions || []);
+    renderModelChart(data.sessions || []);
+    renderSessionsTable(data.sessions || [], data.api_keys || []);
+  } catch { /* ignore */ }
+}
+
+function renderSessionsChart(sessions) {
+  const canvas = $("sessions-chart");
+  if (!canvas) return;
+
+  const days = 30;
+  const now = new Date();
+  const labels = [];
+  const counts = [];
+
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    labels.push(d.toLocaleDateString("en", { month: "short", day: "numeric" }));
+    counts.push(sessions.filter(s => s.created_at?.startsWith(key)).length);
+  }
+
+  if (window._sessionsChart) window._sessionsChart.destroy();
+  window._sessionsChart = new Chart(canvas, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [{
+        label: "Sessions",
+        data: counts,
+        borderColor: "#1a1a1a",
+        backgroundColor: "rgba(26,26,26,0.04)",
+        fill: true,
+        tension: 0.35,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: "#1a1a1a",
+          titleColor: "#fff",
+          bodyColor: "#fff",
+          padding: 10,
+          cornerRadius: 6,
+          displayColors: false
+        }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { maxTicksLimit: 7, font: { size: 11, family: "'Urbanist'" } },
+          border: { display: false }
+        },
+        y: {
+          beginAtZero: true,
+          grid: { color: "#e8e5e0" },
+          ticks: { stepSize: 1, font: { size: 11, family: "'Urbanist'" } },
+          border: { display: false }
+        }
+      }
+    }
+  });
+}
+
+function renderModelChart(sessions) {
+  const canvas = $("model-chart");
+  if (!canvas) return;
+
+  const modelCounts = {};
+  sessions.forEach(s => {
+    const m = s.model || "unknown";
+    modelCounts[m] = (modelCounts[m] || 0) + 1;
+  });
+
+  const labels = Object.keys(modelCounts);
+  const data = Object.values(modelCounts);
+  const palette = ["#1a1a1a", "#6b6560", "#a09a93", "#d5d1cb", "#e8e5e0"];
+
+  if (labels.length === 0) {
+    canvas.parentElement.innerHTML = '<p class="empty" style="padding:40px 0;text-align:center">No data yet.</p>';
+    return;
+  }
+
+  if (window._modelChart) window._modelChart.destroy();
+  window._modelChart = new Chart(canvas, {
+    type: "doughnut",
+    data: {
+      labels,
+      datasets: [{
+        data,
+        backgroundColor: palette.slice(0, labels.length),
+        borderWidth: 0,
+        hoverOffset: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: "bottom",
+          labels: {
+            padding: 16,
+            usePointStyle: true,
+            pointStyle: "circle",
+            font: { size: 12, family: "'Urbanist'" }
+          }
+        },
+        tooltip: {
+          backgroundColor: "#1a1a1a",
+          titleColor: "#fff",
+          bodyColor: "#fff",
+          padding: 10,
+          cornerRadius: 6
+        }
+      },
+      cutout: "65%"
+    }
+  });
+}
+
+function renderSessionsTable(sessions, apiKeys) {
+  const container = $("sessions-table");
+  if (!container) return;
+
+  if (!sessions.length) {
+    container.innerHTML = '<p class="empty">No sessions yet. Create one via the API.</p>';
+    return;
+  }
+
+  const keyMap = {};
+  apiKeys.forEach(k => { keyMap[k.key_id] = k.name || k.key_prefix; });
+
+  const sorted = [...sessions]
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    .slice(0, 25);
+
+  let html = `<table>
+    <thead><tr>
+      <th>Session</th><th>API Key</th><th>Model</th><th>Status</th><th>Created</th>
+    </tr></thead><tbody>`;
+
+  for (const s of sorted) {
+    const shortId = s.session_id.slice(0, 8);
+    const keyName = keyMap[s.api_key_id] || s.api_key_id?.slice(0, 8) || "-";
+    const date = new Date(s.created_at).toLocaleDateString("en", {
+      month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
+    });
+    const sc = s.status === "active" ? "status-active"
+      : s.status === "destroyed" ? "status-destroyed" : "status-other";
+
+    html += `<tr>
+      <td><code>${shortId}…</code></td>
+      <td>${keyName}</td>
+      <td><code>${s.model}</code></td>
+      <td><span class="status-badge ${sc}">${s.status}</span></td>
+      <td>${date}</td>
+    </tr>`;
+  }
+
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
 // ── API Keys ──
 
 async function createKey() {
-  const res = await userFetch("/v1/api-keys", { method: "POST", body: JSON.stringify({ name: "console-key" }) });
+  const nameInput = $("key-name-input");
+  const name = nameInput?.value.trim() || "Untitled key";
+  const res = await userFetch("/v1/api-keys", { method: "POST", body: JSON.stringify({ name }) });
   const body = await res.json();
   if (!res.ok) throw new Error(body.message ?? "Key creation failed.");
-  $("active-key-input").value = body.api_key;
   ls.set(SK.apiKey, body.api_key);
+  const activeInput = $("active-key-input");
+  if (activeInput) activeInput.value = body.api_key;
   $("new-key-value").textContent = body.api_key;
   $("new-key-alert").hidden = false;
+  if (nameInput) nameInput.value = "";
   toast("API key created", "success");
   await loadKeys();
   loadUsage();
@@ -134,153 +321,87 @@ async function loadKeys() {
     const res = await userFetch("/v1/api-keys");
     const body = await res.json();
     const list = $("key-list");
+    if (!list) return;
     list.innerHTML = "";
     if (!body.items?.length) {
-      list.innerHTML = `<p class="empty" style="padding:16px">No API keys yet.</p>`;
+      list.innerHTML = '<p class="empty">No API keys yet.</p>';
       return;
     }
+    const activeKey = ls.get(SK.apiKey);
     for (const item of body.items) {
+      const isActive = activeKey?.startsWith(item.key_prefix);
       const card = document.createElement("div");
       card.className = "key-card";
       card.innerHTML = `
-        <div>
-          <p class="key-name">${item.name ?? "Unnamed key"}</p>
-          <p class="key-prefix">${item.key_prefix}</p>
+        <div class="key-info">
+          <div class="key-name">${item.name ?? "Unnamed key"}${isActive ? '<span class="key-active-badge">Active</span>' : ""}</div>
+          <div class="key-meta"><code>${item.key_prefix}…</code>${item.revoked_at ? ' · <span class="key-revoked">Revoked</span>' : ""}</div>
         </div>
-        <button class="btn btn-danger btn-sm">Revoke</button>
+        ${item.revoked_at ? "" : '<button class="btn btn-danger btn-sm">Revoke</button>'}
       `;
-      card.querySelector("button").addEventListener("click", async () => {
-        await userFetch(`/v1/api-keys/${item.key_id}`, { method: "DELETE" });
-        const active = $("active-key-input").value.trim();
-        if (active.startsWith(item.key_prefix)) {
-          $("active-key-input").value = "";
-          ls.set(SK.apiKey, null);
-        }
-        toast("Key revoked", "info");
-        await loadKeys();
-        loadUsage();
-      });
+      if (!item.revoked_at) {
+        card.querySelector("button").addEventListener("click", async () => {
+          await userFetch(`/v1/api-keys/${item.key_id}`, { method: "DELETE" });
+          if (activeKey?.startsWith(item.key_prefix)) {
+            ls.set(SK.apiKey, null);
+            const activeInput = $("active-key-input");
+            if (activeInput) activeInput.value = "";
+          }
+          toast("Key revoked", "info");
+          await loadKeys();
+          loadUsage();
+        });
+      }
       list.appendChild(card);
     }
   } catch { /* ignore */ }
 }
 
-// ── Sessions ──
+// ── Sessions (available via API, not in dashboard UI) ──
 
 function renderSession() {
-  const s = readSession();
   const box = $("session-summary");
-  if (!s) { box.innerHTML = `<p class="empty">No active session.</p>`; return; }
+  if (!box) return;
+  const s = readSession();
+  if (!s) { box.innerHTML = '<p class="empty">No active session.</p>'; return; }
   box.innerHTML = `
     <p><strong>Session:</strong> <code>${s.session_id}</code></p>
     <p><strong>Status:</strong> <code>${s.status}</code></p>
     <p><strong>Model:</strong> <code>${s.model}</code></p>
-    <p><strong>Effort:</strong> <code>${s.effort}</code></p>
-    <p><strong>Idle expiry:</strong> ${s.idle_expires_at ?? "n/a"}</p>
-    <p><strong>Hard expiry:</strong> ${s.hard_expires_at ?? "n/a"}</p>
   `;
 }
 
 async function createSession() {
-  const opts = JSON.parse($("agent-options-input").value || "{}");
+  const opts = JSON.parse($("agent-options-input")?.value || "{}");
   const res = await apiFetch("/v1/sessions", {
     method: "POST",
     body: JSON.stringify({
-      model: $("model-input").value.trim(),
-      effort: $("effort-select").value,
+      model: $("model-input")?.value?.trim() || "claude-sonnet-4-6",
+      effort: $("effort-select")?.value || "medium",
       agent_options: opts
     })
   });
   const body = await res.json();
   if (!res.ok) throw new Error(body.message ?? "Session creation failed.");
   writeSession(body);
-  renderSession();
-  appendLog("session-created", body);
   toast("Session created", "success");
   loadUsage();
-}
-
-async function refreshSession() {
-  const s = readSession();
-  if (!s) throw new Error("No session.");
-  const res = await apiFetch(`/v1/sessions/${s.session_id}`);
-  const body = await res.json();
-  if (!res.ok) throw new Error(body.message ?? "Refresh failed.");
-  writeSession({ ...s, ...body });
-  renderSession();
 }
 
 async function deleteSession() {
   const s = readSession();
   if (!s?.session_id) return;
   await apiFetch(`/v1/sessions/${s.session_id}`, { method: "DELETE" });
-  closeSSE();
   writeSession(null);
-  renderSession();
-  appendLog("session-delete", "Session deleted.");
   toast("Session deleted", "info");
   loadUsage();
 }
 
-async function bootstrap() {
-  const s = readSession();
-  if (!s?.bootstrap_url) throw new Error("Create a session first.");
-  const key = $("claude-key-input").value.trim();
-  if (!key) throw new Error("Enter your Claude API key.");
-  const res = await fetch(s.bootstrap_url, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ api_key: key })
-  });
-  if (!res.ok) throw new Error(`Bootstrap failed (${res.status}).`);
-  appendLog("bootstrap", "Bootstrap succeeded.");
-  toast("Session bootstrapped", "success");
-}
-
-let eventSource = null;
-
-function closeSSE() {
-  if (eventSource) { eventSource.close(); eventSource = null; }
-}
-
-async function connectSSE() {
-  const s = readSession();
-  if (!s?.session_id) throw new Error("Create a session first.");
-  closeSSE();
-  const tokenRes = await apiFetch(`/v1/sessions/${s.session_id}/stream-token`, {
-    method: "POST", body: JSON.stringify({})
-  });
-  const body = await tokenRes.json();
-  if (!tokenRes.ok) throw new Error(body.message ?? "Could not get stream token.");
-  eventSource = new EventSource(body.events_url);
-  appendLog("events", "Connected to SSE.");
-  eventSource.addEventListener("ready", (e) => appendLog("ready", e.data));
-  eventSource.addEventListener("heartbeat", () => {});
-  eventSource.addEventListener("sdk-message", (e) => appendLog("sdk-message", JSON.parse(e.data)));
-  eventSource.addEventListener("result", (e) => appendLog("result", JSON.parse(e.data)));
-  eventSource.onerror = () => appendLog("events", "SSE connection lost.");
-}
-
-async function sendMessage() {
-  const s = readSession();
-  if (!s?.session_id) throw new Error("Create a session first.");
-  const prompt = $("prompt-input").value.trim();
-  if (!prompt) throw new Error("Enter a prompt.");
-  appendLog("prompt", prompt);
-  const res = await apiFetch(`/v1/sessions/${s.session_id}/messages`, {
-    method: "POST", body: JSON.stringify({ prompt })
-  });
-  const body = await res.json();
-  if (!res.ok) { appendLog("error", body); throw new Error(body.message ?? "Message failed."); }
-  appendLog("result", body);
-}
-
-// ── Event log ──
-
 function appendLog(label, data) {
+  const log = $("event-log");
+  if (!log) return;
   const text = typeof data === "string" ? data : JSON.stringify(data, null, 2);
   const stamp = new Date().toLocaleTimeString();
-  const log = $("event-log");
   log.textContent += `\n[${stamp}] ${label}\n${text}\n`;
   log.scrollTop = log.scrollHeight;
 }
@@ -289,6 +410,7 @@ function appendLog(label, data) {
 
 async function loadBilling() {
   const el = $("billing-status");
+  if (!el) return;
   try {
     const res = await userFetch("/v1/billing/status");
     if (!res.ok) throw new Error();
@@ -303,7 +425,8 @@ async function loadBilling() {
           </div>
         </div>
       `;
-      $("add-payment-btn").textContent = "Update payment method";
+      const btn = $("add-payment-btn");
+      if (btn) btn.textContent = "Update payment method";
     } else {
       el.innerHTML = `
         <div class="billing-card">
@@ -316,7 +439,7 @@ async function loadBilling() {
       `;
     }
   } catch {
-    el.innerHTML = `<p class="empty">Billing not configured yet.</p>`;
+    el.innerHTML = '<p class="empty">Billing not configured yet.</p>';
   }
 }
 
@@ -377,8 +500,8 @@ function safe(id, fn) {
 function wireEvents() {
   $("nav-sign-out")?.addEventListener("click", () => signOut());
 
-  // Tabs
-  document.querySelectorAll(".nav-tab").forEach(t => {
+  // Tab navigation
+  document.querySelectorAll("[data-tab]").forEach(t => {
     t.addEventListener("click", () => switchTab(t.dataset.tab));
   });
 
@@ -393,16 +516,9 @@ function wireEvents() {
     navigator.clipboard.writeText($("new-key-value").textContent);
     toast("Copied to clipboard", "success");
   });
-  $("active-key-input")?.addEventListener("change", (e) => ls.set(SK.apiKey, e.target.value.trim()));
-
-  // Sessions
-  safe("create-session-btn", createSession);
-  safe("refresh-session-btn", refreshSession);
-  safe("delete-session-btn", deleteSession);
-  safe("bootstrap-btn", bootstrap);
-  safe("connect-events-btn", connectSSE);
-  safe("send-message-btn", sendMessage);
-  $("clear-log-btn")?.addEventListener("click", () => { $("event-log").textContent = "Waiting for session activity."; });
+  $("active-key-input")?.addEventListener("change", (e) =>
+    ls.set(SK.apiKey, e.target.value.trim())
+  );
 
   // Billing
   safe("add-payment-btn", addPayment);
@@ -447,7 +563,6 @@ async function init() {
     }
   }
 
-  // Wait for Clerk script to load, then initialize
   try {
     const clerk = await waitForClerk();
     await clerk.load();
@@ -463,14 +578,13 @@ async function init() {
     return;
   }
 
-  // Signed in — show dashboard
+  // Signed in
   showView("dashboard");
   $("nav-user").textContent = getEmail() ?? "";
 
   const savedKey = ls.get(SK.apiKey);
   if (savedKey && $("active-key-input")) $("active-key-input").value = savedKey;
 
-  renderSession();
   loadUsage();
   loadKeys();
   loadBilling();

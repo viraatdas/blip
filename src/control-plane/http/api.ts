@@ -124,6 +124,29 @@ export function createApiHandler(dependencies: ApiDependencies) {
         });
       }
 
+      if (method === "GET" && path === "/v1/usage/history") {
+        const user = await requireUser(event, dependencies.userVerifier);
+        const [keys, sessions] = await Promise.all([
+          dependencies.apiKeyService.listKeys(user.userId),
+          dependencies.sessionRepository.listByUser(user.userId)
+        ]);
+        return jsonResponse(200, {
+          sessions: sessions.map((s) => ({
+            session_id: s.sessionId,
+            api_key_id: s.apiKeyId,
+            model: s.model,
+            effort: s.effort,
+            status: s.status,
+            created_at: s.createdAt
+          })),
+          api_keys: keys.map((k) => ({
+            key_id: k.key_id,
+            name: k.name,
+            key_prefix: k.key_prefix
+          }))
+        });
+      }
+
       // ── Billing (Cognito auth) ──
 
       if (method === "POST" && path === "/v1/billing/setup") {
