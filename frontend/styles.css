@@ -165,13 +165,23 @@ button { font-family: var(--font); }
 .dash-main {
   padding: 40px 48px 80px;
   max-width: 920px;
+  overflow-y: auto;
+  height: 100vh;
 }
 
 .panel {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  animation: fadeUp 0.25s ease-out;
+}
+
+.panel-enter {
+  animation: panelIn 0.2s ease-out;
+}
+
+@keyframes panelIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .page-header { margin-bottom: 4px; }

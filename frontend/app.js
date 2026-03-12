@@ -89,20 +89,52 @@ function showView(name) {
   }
 }
 
-let currentTab = "overview";
+const TABS = ["overview", "keys", "usage", "billing"];
+let currentTab = null;
 
-function switchTab(tab) {
+function switchTab(tab, pushState = true) {
+  if (!TABS.includes(tab)) tab = "overview";
+  if (tab === currentTab) return;
   currentTab = tab;
+
+  // Update URL
+  if (pushState) {
+    const hash = tab === "overview" ? "" : `#${tab}`;
+    history.pushState(null, "", location.pathname + location.search + hash);
+  }
+
+  // Update nav
   document.querySelectorAll("[data-tab]").forEach(t =>
     t.classList.toggle("active", t.dataset.tab === tab)
   );
+
+  // Swap panels with transition
   for (const id of ["panel-overview", "panel-keys", "panel-usage", "panel-billing"]) {
     const p = $(id);
-    if (p) p.hidden = (id !== `panel-${tab}`);
+    if (!p) continue;
+    const isTarget = id === `panel-${tab}`;
+    if (isTarget) {
+      p.hidden = false;
+      p.classList.remove("panel-enter");
+      void p.offsetWidth; // reflow
+      p.classList.add("panel-enter");
+    } else {
+      p.hidden = true;
+    }
   }
+
+  // Scroll main content to top
+  document.querySelector(".dash-main")?.scrollTo(0, 0);
+
+  // Load data for the tab
   if (tab === "usage") loadUsageHistory();
   if (tab === "billing") loadBilling();
   if (tab === "keys") loadKeys();
+}
+
+function getTabFromHash() {
+  const hash = location.hash.replace("#", "");
+  return TABS.includes(hash) ? hash : "overview";
 }
 
 // ── Usage Stats ──
@@ -500,15 +532,14 @@ function safe(id, fn) {
 function wireEvents() {
   $("nav-sign-out")?.addEventListener("click", () => signOut());
 
-  // Tab navigation
+  // Tab navigation (hash routing)
   document.querySelectorAll("[data-tab]").forEach(t => {
     t.addEventListener("click", () => switchTab(t.dataset.tab));
   });
-
-  // Goto links in overview
   document.querySelectorAll("[data-goto]").forEach(btn => {
     btn.addEventListener("click", () => switchTab(btn.dataset.goto));
   });
+  window.addEventListener("popstate", () => switchTab(getTabFromHash(), false));
 
   // Keys
   safe("create-key-btn", createKey);
@@ -585,9 +616,9 @@ async function init() {
   const savedKey = ls.get(SK.apiKey);
   if (savedKey && $("active-key-input")) $("active-key-input").value = savedKey;
 
+  // Navigate to the hash route (or overview)
+  switchTab(getTabFromHash(), false);
   loadUsage();
-  loadKeys();
-  loadBilling();
 }
 
 wireEvents();
