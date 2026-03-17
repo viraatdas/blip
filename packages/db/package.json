@@ -1,0 +1,16 @@
+{
+  "name": "@blip/db",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./repositories/*": "./src/repositories/*.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.0",
+    "@blip/shared": "*"
+  }
+}

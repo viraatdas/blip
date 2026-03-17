@@ -1,0 +1,16 @@
+{
+  "name": "@blip/worker",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "start": "bun run src/index.ts"
+  },
+  "dependencies": {
+    "@blip/shared": "*",
+    "@blip/db": "*",
+    "@blip/e2b": "*",
+    "stripe": "^17.0.0"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "@blip/e2b",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "e2b": "^1.2.0",
+    "@blip/shared": "*"
+  }
+}

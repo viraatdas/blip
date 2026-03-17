@@ -1,7 +1,8 @@
-node_modules
-dist
-cdk.out
-.DS_Store
+node_modules/
+.next/
+dist/
 .env
-.env.*
-.vercel
+.env.local
+*.tsbuildinfo
+.vercel/
+runner/blip-runner.js

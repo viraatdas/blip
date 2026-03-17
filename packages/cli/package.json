@@ -1,0 +1,16 @@
+{
+  "name": "@blip/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "blip": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0"
+  }
+}

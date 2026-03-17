@@ -1,5 +1,8 @@
 node_modules
-dist
-cdk.out
+.next
 .git
-npm-debug.log
+.env
+.env.local
+dist
+*.md
+.vercel
